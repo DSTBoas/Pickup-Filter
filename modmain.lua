@@ -70,18 +70,14 @@ local function can_be_filtered(ent)
     return (rep and rep:CanBePickedUp()) or ent:HasTag("pickable")
 end
 
-AddPrefabPostInitAny(
-    function(inst)
-        if pickup_filter.prefabs[inst.prefab] then
-            inst:DoTaskInTime(
-                FRAMES * 2,
-                function()
-                    colourise(inst, true)
-                end
-            )
-        end
+AddPrefabPostInitAny(function(inst)
+    if not pickup_filter.prefabs[inst.prefab] then
+        return
     end
-)
+    inst:DoTaskInTime(FRAMES * 2, function()
+        colourise(inst, true)
+    end)
+end)
 
 AddClassPostConstruct(
     "components/playeractionpicker",
@@ -94,9 +90,12 @@ AddClassPostConstruct(
                 return actions
             end
             for i = #actions, 1, -1 do
-                local a = actions[i]
-                if (a.action == ACTIONS.PICK or a.action == ACTIONS.PICKUP) and pickup_filter.prefabs[a.target.prefab] then
-                    table.remove(actions, i)
+                local action = actions[i]
+                if action and action.target and action.target.prefab then
+                    if (action.action == ACTIONS.PICK or action.action == ACTIONS.PICKUP)
+                        and pickup_filter.prefabs[action.target.prefab] then
+                        table.remove(actions, i)
+                    end
                 end
             end
             return actions
