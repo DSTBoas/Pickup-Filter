@@ -119,15 +119,16 @@ AddClassPostConstruct(
 
 AddClassPostConstruct(
     "components/playercontroller",
-    function(self)
-        local originalGetActionButtonAction = self.GetActionButtonAction
-        function self:GetActionButtonAction(forceTarget, ...)
-            local act = originalGetActionButtonAction(self, forceTarget, ...)
+    function(playercontroller)
+        local originalGetActionButtonAction = playercontroller.GetActionButtonAction
+        function playercontroller:GetActionButtonAction(force_target, ...)
+            local act = originalGetActionButtonAction(self, force_target, ...)
             if
-                filterOn and self.inst == GLOBAL.ThePlayer and act and pickupFilter.prefabs[act.target.prefab] and
-                    (act.action == ACTIONS.PICK or act.action == ACTIONS.PICKUP)
+                act and (act.action == ACTIONS.PICK or act.action == ACTIONS.PICKUP) and filter_on and
+                    pickup_filter.prefabs[act.target.prefab] and
+                    self.inst == _G.ThePlayer
              then
-                return nil
+                return
             end
             return act
         end
