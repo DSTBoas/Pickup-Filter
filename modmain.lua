@@ -70,59 +70,64 @@ local function can_be_filtered(ent)
     return (rep and rep:CanBePickedUp()) or ent:HasTag("pickable")
 end
 
-AddPrefabPostInitAny(function(inst)
-    if not pickup_filter.prefabs[inst.prefab] then
-        return
+AddPrefabPostInitAny(
+    function(inst)
+        if not pickup_filter.prefabs[inst.prefab] then
+            return
+        end
+        inst:DoTaskInTime(
+            FRAMES * 2,
+            function()
+                colourise(inst, true)
+            end
+        )
     end
-    inst:DoTaskInTime(FRAMES * 2, function()
-        colourise(inst, true)
-    end)
-end)
+)
 
 AddClassPostConstruct(
     "components/playeractionpicker",
-    function(Class)
-        local old_left = Class.GetLeftClickActions
-        local old_right = Class.GetRightClickActions
-
-        local function strip(self, actions)
-            if not (filter_on and self.inst == _G.ThePlayer) then
+    function(self)
+        local function filterActions(actions, inst)
+            if not (filter_on and inst == _G.ThePlayer) then
                 return actions
             end
             for i = #actions, 1, -1 do
-                local action = actions[i]
-                if action and action.target and action.target.prefab then
-                    if (action.action == ACTIONS.PICK or action.action == ACTIONS.PICKUP)
-                        and pickup_filter.prefabs[action.target.prefab] then
-                        table.remove(actions, i)
-                    end
+                local act = actions[i]
+                if
+                    act and act.target and pickup_filter.prefabs[act.target.prefab] and
+                        (act.action == ACTIONS.PICK or act.action == ACTIONS.PICKUP)
+                 then
+                    table.remove(actions, i)
                 end
             end
             return actions
         end
 
-        function Class:GetLeftClickActions(...)
-            return strip(self, old_left(self, ...))
+        local originalGetLeftClickActions = self.GetLeftClickActions
+        function self:GetLeftClickActions(...)
+            local actions = originalGetLeftClickActions(self, ...)
+            return filterActions(actions, self.inst)
         end
 
-        function Class:GetRightClickActions(...)
-            return strip(self, old_right(self, ...))
+        local originalGetRightClickActions = self.GetRightClickActions
+        function self:GetRightClickActions(...)
+            local actions = originalGetRightClickActions(self, ...)
+            return filterActions(actions, self.inst)
         end
     end
 )
 
 AddClassPostConstruct(
     "components/playercontroller",
-    function(Class)
-        local old_get = Class.GetActionButtonAction
-        function Class:GetActionButtonAction(force_target, ...)
-            local act = old_get(self, force_target, ...)
+    function(self)
+        local originalGetActionButtonAction = self.GetActionButtonAction
+        function self:GetActionButtonAction(forceTarget, ...)
+            local act = originalGetActionButtonAction(self, forceTarget, ...)
             if
-                act and (act.action == ACTIONS.PICK or act.action == ACTIONS.PICKUP) and filter_on and
-                    pickup_filter.prefabs[act.target.prefab] and
-                    self.inst == _G.ThePlayer
+                filterOn and self.inst == GLOBAL.ThePlayer and act and pickupFilter.prefabs[act.target.prefab] and
+                    (act.action == ACTIONS.PICK or act.action == ACTIONS.PICKUP)
              then
-                return
+                return nil
             end
             return act
         end
@@ -131,13 +136,14 @@ AddClassPostConstruct(
 
 AddClassPostConstruct(
     "components/inventoryitem_replica",
-    function(Class)
-        local old_can = Class.CanBePickedUp
-        function Class:CanBePickedUp(picker)
-            if filter_on and picker == _G.ThePlayer and self.inst:HasTag(TAG_FILTERED) then
+    function(self)
+        local originalCanBePickedUp = self.CanBePickedUp
+
+        function self:CanBePickedUp(picker)
+            if filter_on and picker == _G.ThePlayer and self.inst and self.inst:HasTag(TAG_FILTERED) then
                 return false
             end
-            return old_can(self, picker)
+            return originalCanBePickedUp(self, picker)
         end
     end
 )
@@ -150,7 +156,7 @@ _G.TheInput:AddKeyDownHandler(
         end
 
         local ent = _G.TheInput:GetWorldEntityUnderMouse()
-        if not can_be_filtered(ent) then
+        if not (ent and ent.prefab and can_be_filtered(ent)) then
             talk("I can’t filter that.")
             return
         end
@@ -166,7 +172,7 @@ _G.TheInput:AddKeyDownHandler(
         )
 
         for _, v in pairs(_G.Ents) do
-            if v.prefab == prefab then
+            if v and v.prefab == prefab then
                 colourise(v, now_filtered and filter_on)
             end
         end
