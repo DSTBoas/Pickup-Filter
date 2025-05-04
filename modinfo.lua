@@ -1,4 +1,4 @@
-name = "Pickup Filter Mod"
+name = "Pickup Filter"
 description = "Allows configuration of pickup filter with alphabet and function keys."
 
 icon_atlas = "modicon.xml"

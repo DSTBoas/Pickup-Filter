@@ -41,7 +41,7 @@ end
 
 local pickup_filter = {prefabs = load_filter()}
 
-local function colourise(ent, on)
+local function tintItem(ent, on)
     if ent and ent.AnimState then
         if on then
             ent.AnimState:SetMultColour(1, 0, 0, 1)
@@ -62,14 +62,14 @@ local function talk(msg)
     end
 end
 
-local function can_be_filtered(ent)
-    if not ent then
-        return false
-    end
-    local rep = ent.replica and ent.replica.inventoryitem
-    return (rep and rep:CanBePickedUp()) or ent:HasTag("pickable")
+local function canBeFiltered(ent)
+    return (ent
+        and ent.replica
+        and ent.replica.inventoryitem
+        and ent.replica.inventoryitem:CanBePickedUp()
+    )
+    or (ent and ent:HasTag("pickable"))
 end
-
 AddPrefabPostInitAny(
     function(inst)
         if not pickup_filter.prefabs[inst.prefab] then
@@ -78,7 +78,7 @@ AddPrefabPostInitAny(
         inst:DoTaskInTime(
             FRAMES * 2,
             function()
-                colourise(inst, true)
+                tintItem(inst, true)
             end
         )
     end
@@ -139,7 +139,6 @@ AddClassPostConstruct(
     "components/inventoryitem_replica",
     function(self)
         local originalCanBePickedUp = self.CanBePickedUp
-
         function self:CanBePickedUp(picker)
             if filter_on and picker == _G.ThePlayer and self.inst and self.inst:HasTag(TAG_FILTERED) then
                 return false
@@ -157,7 +156,7 @@ _G.TheInput:AddKeyDownHandler(
         end
 
         local ent = _G.TheInput:GetWorldEntityUnderMouse()
-        if not (ent and ent.prefab and can_be_filtered(ent)) then
+        if not (ent and ent.prefab and canBeFiltered(ent)) then
             talk("I can’t filter that.")
             return
         end
@@ -174,7 +173,7 @@ _G.TheInput:AddKeyDownHandler(
 
         for _, v in pairs(_G.Ents) do
             if v and v.prefab == prefab then
-                colourise(v, now_filtered and filter_on)
+                tintItem(v, now_filtered and filter_on)
             end
         end
     end
@@ -192,7 +191,7 @@ _G.TheInput:AddKeyDownHandler(
 
         for _, ent in pairs(_G.Ents) do
             if pickup_filter.prefabs[ent.prefab] then
-                colourise(ent, filter_on)
+                tintItem(ent, filter_on)
             end
         end
     end
