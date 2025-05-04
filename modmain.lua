@@ -87,38 +87,40 @@ AddPrefabPostInitAny(
     end
 )
 
-AddClassPostConstruct(
-    "components/playeractionpicker",
-    function(self)
-        local function filterActions(actions, inst)
-            if not (filter_on and inst == _G.ThePlayer) then
+if not getKeyFromConfig("ALLOW_MOUSE_PICKUP_THROUGH_FILTER") then
+    AddClassPostConstruct(
+        "components/playeractionpicker",
+        function(self)
+            local function filterActions(actions, inst)
+                if not (filter_on and inst == _G.ThePlayer) then
+                    return actions
+                end
+                for i = #actions, 1, -1 do
+                    local act = actions[i]
+                    if
+                        act and act.target and pickup_filter.prefabs[act.target.prefab] and
+                            (act.action == ACTIONS.PICK or act.action == ACTIONS.PICKUP)
+                    then
+                        table.remove(actions, i)
+                    end
+                end
                 return actions
             end
-            for i = #actions, 1, -1 do
-                local act = actions[i]
-                if
-                    act and act.target and pickup_filter.prefabs[act.target.prefab] and
-                        (act.action == ACTIONS.PICK or act.action == ACTIONS.PICKUP)
-                 then
-                    table.remove(actions, i)
-                end
+
+            local originalGetLeftClickActions = self.GetLeftClickActions
+            function self:GetLeftClickActions(...)
+                local actions = originalGetLeftClickActions(self, ...)
+                return filterActions(actions, self.inst)
             end
-            return actions
-        end
 
-        local originalGetLeftClickActions = self.GetLeftClickActions
-        function self:GetLeftClickActions(...)
-            local actions = originalGetLeftClickActions(self, ...)
-            return filterActions(actions, self.inst)
+            local originalGetRightClickActions = self.GetRightClickActions
+            function self:GetRightClickActions(...)
+                local actions = originalGetRightClickActions(self, ...)
+                return filterActions(actions, self.inst)
+            end
         end
-
-        local originalGetRightClickActions = self.GetRightClickActions
-        function self:GetRightClickActions(...)
-            local actions = originalGetRightClickActions(self, ...)
-            return filterActions(actions, self.inst)
-        end
-    end
-)
+    )
+end
 
 AddClassPostConstruct(
     "components/playercontroller",

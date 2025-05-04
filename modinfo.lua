@@ -66,8 +66,15 @@ local function GetKeyboardOptions()
     return keys
 end
 
+local function GetToggleOptions()
+    return {
+        AddConfigOption("Disabled", false),
+        AddConfigOption("Enabled", true)
+    }
+end
 
 local KeyboardOptions = GetKeyboardOptions()
+local ToggleOptions = GetToggleOptions()
 local AssignKeyMessage = "Assign a key"
 
 configuration_options =
@@ -86,5 +93,13 @@ configuration_options =
         KeyboardOptions,
         "KEY_F2",
         AssignKeyMessage
+    ),
+    AddSectionTitle("Pickup Filter Settings"),
+    AddConfig(
+        "Mouse Ignores Pickup Filter",
+        "ALLOW_MOUSE_PICKUP_THROUGH_FILTER",
+        ToggleOptions,
+        false,
+        "Allows mouse clicks to bypass the pickup filter for harvestable objects (e.g., Flowers, Grass), but not items lying on the ground."
     )
-}
+}    
