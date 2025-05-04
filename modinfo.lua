@@ -1,5 +1,5 @@
 name = "Pickup Filter"
-description = "Allows configuration of pickup filter with alphabet and function keys."
+description = "Filter items you pickup by pressing a key!"
 
 icon_atlas = "modicon.xml"
 icon = "modicon.tex"
@@ -74,15 +74,15 @@ configuration_options =
 {
     AddSectionTitle("Pickup Filter Keybinds"),
     AddConfig(
-        "Toggle Pickup Filter",
-        "TOGGLE_PICKUP_FILTER",
+        "Filter Item",
+        "FILTER_ITEM_KEY",
         KeyboardOptions,
         "KEY_F1",
         AssignKeyMessage
     ),
     AddConfig(
-        "Filter Quick Toggle",
-        "FILTER_QUICK_TOGGLE",
+        "Toggle Pickup Filter",
+        "TOGGLE_PICKUP_FILTER_KEY",
         KeyboardOptions,
         "KEY_F2",
         AssignKeyMessage

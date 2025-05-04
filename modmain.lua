@@ -2,13 +2,13 @@ local _G = GLOBAL
 local ACTIONS = _G.ACTIONS
 local FRAMES = _G.FRAMES
 
-local function key_from_config(name)
+local function getKeyFromConfig(name)
     local k = GetModConfigData(name)
     return (type(k) == "string") and _G[k] or k
 end
 
-local KEY_TOGGLE = key_from_config("TOGGLE_PICKUP_FILTER")
-local KEY_QUICK_TOGGLE = key_from_config("FILTER_QUICK_TOGGLE")
+local FILTER_ITEM_KEY = getKeyFromConfig("FILTER_ITEM_KEY")
+local TOGGLE_PICKUP_FILTER_KEY = getKeyFromConfig("TOGGLE_PICKUP_FILTER_KEY")
 
 local TAG_FILTERED = "pf_no_pickup"
 local SAVE_FILE = "pickup_filter_data.txt"
@@ -46,7 +46,7 @@ end)
 
 local function tintItem(ent, on)
     if ent and ent.AnimState then
-        if on then
+        if on and filter_on then
             ent.AnimState:SetMultColour(1, 0, 0, 1)
             ent:AddTag(TAG_FILTERED)
         else
@@ -61,7 +61,7 @@ local function talk(msg)
     if ply and ply.components.talker then
         ply.components.talker:Say(msg)
     else
-        print("[PickupFilter] " .. msg)
+        print("[Pickup Filter] " .. msg)
     end
 end
 
@@ -152,7 +152,7 @@ AddClassPostConstruct(
 )
 
 _G.TheInput:AddKeyDownHandler(
-    KEY_TOGGLE,
+    FILTER_ITEM_KEY,
     function()
         if _G.IsPaused() then
             return
@@ -183,7 +183,7 @@ _G.TheInput:AddKeyDownHandler(
 )
 
 _G.TheInput:AddKeyDownHandler(
-    KEY_QUICK_TOGGLE,
+    TOGGLE_PICKUP_FILTER_KEY,
     function()
         if _G.IsPaused() then
             return
