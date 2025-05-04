@@ -13,7 +13,7 @@ local TOGGLE_PICKUP_FILTER_KEY = getKeyFromConfig("TOGGLE_PICKUP_FILTER_KEY")
 local TAG_FILTERED = "pf_no_pickup"
 local SAVE_FILE = "pickup_filter_data.txt"
 
-local filter_on = true
+local filterEnabled = true
 
 local function saveFilter(tbl)
     local out, n = {}, 0
@@ -24,7 +24,7 @@ local function saveFilter(tbl)
     _G.TheSim:SetPersistentString(SAVE_FILE, table.concat(out, "\n"), false)
 end
 
-local function loadFilter(cb)
+local function loadFilter(callback)
     _G.TheSim:GetPersistentString(
         SAVE_FILE,
         function(ok, data)
@@ -34,19 +34,19 @@ local function loadFilter(cb)
                     filter[prefab] = true
                 end
             end
-            cb(filter)
+            callback(filter)
         end
     )
 end
 
-local pickup_filter = {prefabs = {}}
+local pickupFilter = {prefabs = {}}
 loadFilter(function(filter)
-    pickup_filter.prefabs = filter
+    pickupFilter.prefabs = filter
 end)
 
 local function tintItem(ent, on)
     if ent and ent.AnimState then
-        if on and filter_on then
+        if on and filterEnabled then
             ent.AnimState:SetMultColour(1, 0, 0, 1)
             ent:AddTag(TAG_FILTERED)
         else
@@ -73,54 +73,69 @@ local function canBeFiltered(ent)
     )
     or (ent and ent:HasTag("pickable"))
 end
+
+local function CanMouseThroughFiltered(ent)
+    if filterEnabled and ent:HasTag(TAG_FILTERED) then
+        return true, true
+    end
+end
+
+local REMOVE_INTERACTIONS_BOOL = getKeyFromConfig("REMOVE_INTERACTIONS_FROM_FILTERED_BOOL")
+
 AddPrefabPostInitAny(
     function(inst)
-        if not pickup_filter.prefabs[inst.prefab] then
+        if not inst or not inst.prefab or not pickupFilter.prefabs[inst.prefab] then
             return
         end
         inst:DoTaskInTime(
             FRAMES * 2,
             function()
+                if REMOVE_INTERACTIONS_BOOL then
+                    inst.CanMouseThrough = CanMouseThroughFiltered
+                end
                 tintItem(inst, true)
             end
         )
     end
 )
 
-if not getKeyFromConfig("ALLOW_MOUSE_PICKUP_THROUGH_FILTER") then
-    AddClassPostConstruct(
-        "components/playeractionpicker",
-        function(self)
-            local function filterActions(actions, inst)
-                if not (filter_on and inst == _G.ThePlayer) then
-                    return actions
-                end
-                for i = #actions, 1, -1 do
-                    local act = actions[i]
-                    if
-                        act and act.target and pickup_filter.prefabs[act.target.prefab] and
-                            (act.action == ACTIONS.PICK or act.action == ACTIONS.PICKUP)
-                    then
-                        table.remove(actions, i)
-                    end
-                end
+local ALLOW_MOUSE_PICKUP_BOOL = getKeyFromConfig("ALLOW_MOUSE_PICKUP_THROUGH_FILTER_BOOL")
+
+AddClassPostConstruct(
+    "components/playeractionpicker",
+    function(self)
+        local function filterActions(actions, inst)
+            if not (filterEnabled and inst == _G.ThePlayer) then
                 return actions
             end
 
-            local originalGetLeftClickActions = self.GetLeftClickActions
-            function self:GetLeftClickActions(...)
-                local actions = originalGetLeftClickActions(self, ...)
-                return filterActions(actions, self.inst)
+            for i = #actions, 1, -1 do
+                local act = actions[i]
+                if act and act.target and act.target.prefab and pickupFilter.prefabs[act.target.prefab] then
+                    local isFilteredAction = not ALLOW_MOUSE_PICKUP_BOOL and (act.action == ACTIONS.PICK or act.action == ACTIONS.PICKUP)
+                    local isExamineOrWalk = REMOVE_INTERACTIONS_BOOL and (act.action == ACTIONS.LOOKAT or act.action == ACTIONS.WALKTO)
+                    
+                    if isFilteredAction or isExamineOrWalk then
+                        table.remove(actions, i)
+                    end
+                end
             end
-
-            local originalGetRightClickActions = self.GetRightClickActions
-            function self:GetRightClickActions(...)
-                local actions = originalGetRightClickActions(self, ...)
-                return filterActions(actions, self.inst)
-            end
+            return actions
         end
-    )
-end
+
+        local originalGetLeftClickActions = self.GetLeftClickActions
+        function self:GetLeftClickActions(...)
+            local actions = originalGetLeftClickActions(self, ...)
+            return filterActions(actions, self.inst)
+        end
+
+        local originalGetRightClickActions = self.GetRightClickActions
+        function self:GetRightClickActions(...)
+            local actions = originalGetRightClickActions(self, ...)
+            return filterActions(actions, self.inst)
+        end
+    end
+)
 
 AddClassPostConstruct(
     "components/playercontroller",
@@ -129,8 +144,8 @@ AddClassPostConstruct(
         function playercontroller:GetActionButtonAction(force_target, ...)
             local act = originalGetActionButtonAction(self, force_target, ...)
             if
-                act and (act.action == ACTIONS.PICK or act.action == ACTIONS.PICKUP) and filter_on and
-                    pickup_filter.prefabs[act.target.prefab] and
+                act and (act.action == ACTIONS.PICK or act.action == ACTIONS.PICKUP) and filterEnabled and
+                    pickupFilter.prefabs[act.target.prefab] and
                     self.inst == _G.ThePlayer
              then
                 return
@@ -145,7 +160,7 @@ AddClassPostConstruct(
     function(self)
         local originalCanBePickedUp = self.CanBePickedUp
         function self:CanBePickedUp(picker)
-            if filter_on and picker == _G.ThePlayer and self.inst and self.inst:HasTag(TAG_FILTERED) then
+            if filterEnabled and picker == _G.ThePlayer and self.inst and self.inst:HasTag(TAG_FILTERED) then
                 return false
             end
             return originalCanBePickedUp(self, picker)
@@ -167,18 +182,18 @@ _G.TheInput:AddKeyDownHandler(
         end
 
         local prefab = ent.prefab
-        local now_filtered = not pickup_filter.prefabs[prefab]
-        pickup_filter.prefabs[prefab] = now_filtered or nil
-        saveFilter(pickup_filter.prefabs)
+        local now_filtered = not pickupFilter.prefabs[prefab]
+        pickupFilter.prefabs[prefab] = now_filtered or nil
+        saveFilter(pickupFilter.prefabs)
 
         talk(
             now_filtered and string.format("Okay! I’ll ignore “%s” from now on.", ent.name or prefab) or
                 string.format("Got it! I’ll pick up “%s” again.", ent.name or prefab)
         )
 
-        for _, v in pairs(_G.Ents) do
-            if v and v.prefab == prefab then
-                tintItem(v, now_filtered and filter_on)
+        for _, ent in pairs(_G.Ents) do
+            if ent and ent.prefab and ent.prefab == prefab then
+                tintItem(ent, now_filtered and filterEnabled)
             end
         end
     end
@@ -190,13 +205,13 @@ _G.TheInput:AddKeyDownHandler(
         if _G.IsPaused() then
             return
         end
-        filter_on = not filter_on
+        filterEnabled = not filterEnabled
 
-        talk(filter_on and "Pickup filter enabled." or "Pickup filter temporarily disabled.")
+        talk(filterEnabled and "Pickup filter enabled." or "Pickup filter temporarily disabled.")
 
         for _, ent in pairs(_G.Ents) do
-            if ent.prefab and pickup_filter.prefabs[ent.prefab] then
-                tintItem(ent, filter_on)
+            if ent and ent.prefab and pickupFilter.prefabs[ent.prefab] then
+                tintItem(ent, filterEnabled)
             end
         end
     end

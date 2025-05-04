@@ -94,12 +94,19 @@ configuration_options =
         "KEY_F2",
         AssignKeyMessage
     ),
-    AddSectionTitle("Pickup Filter Settings"),
+    AddSectionTitle("Advanced Settings"),
     AddConfig(
-        "Mouse Ignores Pickup Filter",
-        "ALLOW_MOUSE_PICKUP_THROUGH_FILTER",
+        "Allow Mouse",
+        "ALLOW_MOUSE_PICKUP_THROUGH_FILTER_BOOL",
         ToggleOptions,
         false,
         "Allows mouse clicks to bypass the pickup filter for harvestable objects (e.g., Flowers, Grass), but not items lying on the ground."
+    ),
+    AddConfig(
+        "Remove Interactions",
+        "REMOVE_INTERACTIONS_FROM_FILTERED_BOOL",
+        ToggleOptions,
+        false,
+        "Prevents all interactions, including examine, with items that are currently filtered."
     )
 }    
