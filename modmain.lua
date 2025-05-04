@@ -15,7 +15,7 @@ local SAVE_FILE = "pickup_filter_data.txt"
 
 local filter_on = true
 
-local function save_filter(tbl)
+local function saveFilter(tbl)
     local out, n = {}, 0
     for prefab in pairs(tbl) do
         n = n + 1
@@ -24,22 +24,25 @@ local function save_filter(tbl)
     _G.TheSim:SetPersistentString(SAVE_FILE, table.concat(out, "\n"), false)
 end
 
-local function load_filter()
-    local filter = {}
+local function loadFilter(cb)
     _G.TheSim:GetPersistentString(
         SAVE_FILE,
         function(ok, data)
+            local filter = {}
             if ok and data then
                 for prefab in data:gmatch("[^\r\n]+") do
                     filter[prefab] = true
                 end
             end
+            cb(filter)
         end
     )
-    return filter
 end
 
-local pickup_filter = {prefabs = load_filter()}
+local pickup_filter = {prefabs = {}}
+loadFilter(function(filter)
+    pickup_filter.prefabs = filter
+end)
 
 local function tintItem(ent, on)
     if ent and ent.AnimState then
@@ -164,7 +167,7 @@ _G.TheInput:AddKeyDownHandler(
         local prefab = ent.prefab
         local now_filtered = not pickup_filter.prefabs[prefab]
         pickup_filter.prefabs[prefab] = now_filtered or nil
-        save_filter(pickup_filter.prefabs)
+        saveFilter(pickup_filter.prefabs)
 
         talk(
             now_filtered and string.format("Okay! I’ll ignore “%s” from now on.", ent.name or prefab) or
@@ -190,7 +193,7 @@ _G.TheInput:AddKeyDownHandler(
         talk(filter_on and "Pickup filter enabled." or "Pickup filter temporarily disabled.")
 
         for _, ent in pairs(_G.Ents) do
-            if pickup_filter.prefabs[ent.prefab] then
+            if ent.prefab and pickup_filter.prefabs[ent.prefab] then
                 tintItem(ent, filter_on)
             end
         end
