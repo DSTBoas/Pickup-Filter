@@ -9,6 +9,8 @@ end
 
 local FILTER_ITEM_KEY = getKeyFromConfig("FILTER_ITEM_KEY")
 local TOGGLE_PICKUP_FILTER_KEY = getKeyFromConfig("TOGGLE_PICKUP_FILTER_KEY")
+local ALLOW_MOUSE_PICKUP_BOOL = getKeyFromConfig("ALLOW_MOUSE_PICKUP_THROUGH_FILTER_BOOL")
+local REMOVE_INTERACTIONS_BOOL = getKeyFromConfig("REMOVE_INTERACTIONS_FROM_FILTERED_BOOL")
 
 local TAG_FILTERED = "pf_no_pickup"
 local SAVE_FILE = "pickup_filter_data.txt"
@@ -80,26 +82,39 @@ local function CanMouseThroughFiltered(ent)
     end
 end
 
-local REMOVE_INTERACTIONS_BOOL = getKeyFromConfig("REMOVE_INTERACTIONS_FROM_FILTERED_BOOL")
-
-AddPrefabPostInitAny(
-    function(inst)
-        if not inst or not inst.prefab or not pickupFilter.prefabs[inst.prefab] then
-            return
-        end
-        inst:DoTaskInTime(
-            FRAMES * 2,
-            function()
-                if REMOVE_INTERACTIONS_BOOL then
-                    inst.CanMouseThrough = CanMouseThroughFiltered
-                end
-                tintItem(inst, true)
-            end
-        )
+local function PatchCanMouseThrough(inst)
+    if inst._pf_can_mouse_wrapped then
+        return
     end
-)
+    
+    inst._pf_can_mouse_wrapped = true
+    inst._pf_original_can_mouse = inst.CanMouseThrough
 
-local ALLOW_MOUSE_PICKUP_BOOL = getKeyFromConfig("ALLOW_MOUSE_PICKUP_THROUGH_FILTER_BOOL")
+    inst.CanMouseThrough = function(self, ...)
+        if filterEnabled and self:HasTag(TAG_FILTERED) then
+            return true, true
+        end
+        if self._pf_original_can_mouse then
+            return self._pf_original_can_mouse(self, ...)
+        end
+    end
+end
+
+AddPrefabPostInitAny(function(inst)
+    if not inst then
+        return
+    end
+
+    if REMOVE_INTERACTIONS_BOOL then
+        PatchCanMouseThrough(inst)
+    end
+
+    if inst.prefab and pickupFilter.prefabs[inst.prefab] then
+        inst:DoTaskInTime(FRAMES * 2, function()
+            tintItem(inst, true)
+        end)
+    end
+end)
 
 AddClassPostConstruct(
     "components/playeractionpicker",
