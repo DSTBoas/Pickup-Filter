@@ -190,27 +190,52 @@ _G.TheInput:AddKeyDownHandler(
             return
         end
 
-        local ent = _G.TheInput:GetWorldEntityUnderMouse()
-        if not (ent and ent.prefab and canBeFiltered(ent)) then
-            talk("I can’t filter that.")
-            return
-        end
-
-        local prefab = ent.prefab
-        local now_filtered = not pickupFilter.prefabs[prefab]
-        pickupFilter.prefabs[prefab] = now_filtered or nil
-        saveFilter(pickupFilter.prefabs)
-
-        talk(
-            now_filtered and string.format("Okay! I’ll ignore “%s” from now on.", ent.name or prefab) or
-                string.format("Got it! I’ll pick up “%s” again.", ent.name or prefab)
-        )
-
-        for _, ent in pairs(_G.Ents) do
-            if ent and ent.prefab and ent.prefab == prefab then
-                tintItem(ent, now_filtered and filterEnabled)
+        local touched = {}
+        if REMOVE_INTERACTIONS_BOOL then
+            for _, inst in pairs(_G.Ents) do
+                if inst and inst:HasTag(TAG_FILTERED)
+                then
+                    touched[inst] = inst.CanMouseThrough
+                    inst.CanMouseThrough = nil
+                end
             end
         end
+
+        _G.ThePlayer:DoTaskInTime(_G.FRAMES, function()
+            local ent = _G.TheInput:GetWorldEntityUnderMouse()
+
+            for inst, wrapped in pairs(touched) do
+                inst.CanMouseThrough = function(self, ...)
+                    if filterEnabled and self:HasTag(TAG_FILTERED) then
+                        return true, true
+                    end
+                    return wrapped and wrapped(self, ...)
+                end
+            end
+            touched = nil
+
+            if not (ent and ent.prefab and canBeFiltered(ent)) then
+                talk("I can’t filter that.")
+                return
+            end
+
+            local prefab = ent.prefab
+            local now_filtered = not pickupFilter.prefabs[prefab]
+            pickupFilter.prefabs[prefab] = now_filtered or nil
+            saveFilter(pickupFilter.prefabs)
+
+            talk(
+                now_filtered
+                    and string.format("Okay! I’ll ignore “%s” from now on.", ent.name or prefab)
+                    or  string.format("Got it! I’ll pick up “%s” again.",   ent.name or prefab)
+            )
+
+            for _, inst in pairs(_G.Ents) do
+                if inst and inst.prefab == prefab then
+                    tintItem(inst, now_filtered and filterEnabled)
+                end
+            end
+        end)
     end
 )
 
