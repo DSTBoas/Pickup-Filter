@@ -5,7 +5,7 @@ icon_atlas = "modicon.xml"
 icon = "modicon.tex"
 
 author = "Boas"
-version = "1.0.1"
+version = "1.0.2"
 forumthread = ""
 
 dont_starve_compatible = false
@@ -17,8 +17,8 @@ client_only_mod = true
 
 api_version = 10
 
-local function AddConfigOption(desc, data)
-    return {description = desc, data = data}
+local function AddConfigOption(desc, data, hover)
+    return {description = desc, data = data, hover = hover}
 end
 
 local function AddConfig(label, name, options, default, hover)
@@ -108,5 +108,17 @@ configuration_options =
         ToggleOptions,
         false,
         "Prevents all interactions, including examine, with items that are currently filtered."
-    )
-}    
+    ),
+    AddSectionTitle("Save Settings"),
+    AddConfig(
+        "Remember Filtered Targets",
+        "PERSISTENCE_MODE",
+        {
+            AddConfigOption("Don't save", "disabled", "Never remember your filtered targets."),
+            AddConfigOption("Save for all games", "game", "Remember filtered targets in every world."),
+            AddConfigOption("Save per world", "world", "Each world remembers its own filtered targets."),
+        },
+        "game",
+        "Choose how your filter is remembered"
+    ),
+}

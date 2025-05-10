@@ -1,6 +1,7 @@
 local _G = GLOBAL
 local ACTIONS = _G.ACTIONS
 local FRAMES = _G.FRAMES
+local TheNet = _G.TheNet
 
 local function getKeyFromConfig(name)
     local k = GetModConfigData(name)
@@ -11,24 +12,45 @@ local FILTER_ITEM_KEY = getKeyFromConfig("FILTER_ITEM_KEY")
 local TOGGLE_PICKUP_FILTER_KEY = getKeyFromConfig("TOGGLE_PICKUP_FILTER_KEY")
 local ALLOW_MOUSE_PICKUP_BOOL = getKeyFromConfig("ALLOW_MOUSE_PICKUP_THROUGH_FILTER_BOOL")
 local REMOVE_INTERACTIONS_BOOL = getKeyFromConfig("REMOVE_INTERACTIONS_FROM_FILTERED_BOOL")
+local PERSISTENCE_MODE = GetModConfigData("PERSISTENCE_MODE") or "game"
 
 local TAG_FILTERED = "pf_no_pickup"
 local SAVE_FILE = "pickup_filter_data.txt"
 
 local filterEnabled = true
 
+local function GetSaveFile()
+    if PERSISTENCE_MODE == "disabled" then
+        return nil
+    elseif PERSISTENCE_MODE == "world" then
+        local id = TheNet and TheNet.GetSessionIdentifier and TheNet:GetSessionIdentifier() or "unknown"
+        return string.format("pickup_filter_data%s.txt", id)
+    else
+        return "pickup_filter_data.txt"
+    end
+end
+
 local function saveFilter(tbl)
+    local file = GetSaveFile()
+    if not file then return end
+
     local out, n = {}, 0
     for prefab in pairs(tbl) do
         n = n + 1
         out[n] = prefab
     end
-    _G.TheSim:SetPersistentString(SAVE_FILE, table.concat(out, "\n"), false)
+    _G.TheSim:SetPersistentString(file, table.concat(out, "\n"), false)
 end
 
-local function loadFilter(callback)
+local function loadFilter(cb)
+    local file = GetSaveFile()
+    if not file then
+        cb({})
+        return
+    end
+
     _G.TheSim:GetPersistentString(
-        SAVE_FILE,
+        file,
         function(ok, data)
             local filter = {}
             if ok and data then
@@ -36,7 +58,7 @@ local function loadFilter(callback)
                     filter[prefab] = true
                 end
             end
-            callback(filter)
+            cb(filter)
         end
     )
 end
@@ -46,7 +68,7 @@ loadFilter(function(filter)
     pickupFilter.prefabs = filter
 end)
 
-local function tintItem(ent, on)
+local function tintEntity(ent, on)
     if ent and ent.AnimState then
         if on and filterEnabled then
             ent.AnimState:SetMultColour(1, 0, 0, 1)
@@ -76,17 +98,11 @@ local function canBeFiltered(ent)
     or (ent and ent:HasTag("pickable"))
 end
 
-local function CanMouseThroughFiltered(ent)
-    if filterEnabled and ent:HasTag(TAG_FILTERED) then
-        return true, true
-    end
-end
-
 local function PatchCanMouseThrough(inst)
     if inst._pf_can_mouse_wrapped then
         return
     end
-    
+
     inst._pf_can_mouse_wrapped = true
     inst._pf_original_can_mouse = inst.CanMouseThrough
 
@@ -111,7 +127,7 @@ AddPrefabPostInitAny(function(inst)
 
     if inst.prefab and pickupFilter.prefabs[inst.prefab] then
         inst:DoTaskInTime(FRAMES * 2, function()
-            tintItem(inst, true)
+            tintEntity(inst, true)
         end)
     end
 end)
@@ -129,7 +145,7 @@ AddClassPostConstruct(
                 if act and act.target and act.target.prefab and pickupFilter.prefabs[act.target.prefab] then
                     local isFilteredAction = not ALLOW_MOUSE_PICKUP_BOOL and (act.action == ACTIONS.PICK or act.action == ACTIONS.PICKUP)
                     local isExamineOrWalk = REMOVE_INTERACTIONS_BOOL and (act.action == ACTIONS.LOOKAT or act.action == ACTIONS.WALKTO)
-                    
+
                     if isFilteredAction or isExamineOrWalk then
                         table.remove(actions, i)
                     end
@@ -232,7 +248,7 @@ _G.TheInput:AddKeyDownHandler(
 
             for _, inst in pairs(_G.Ents) do
                 if inst and inst.prefab == prefab then
-                    tintItem(inst, now_filtered and filterEnabled)
+                    tintEntity(inst, now_filtered and filterEnabled)
                 end
             end
         end)
@@ -251,7 +267,7 @@ _G.TheInput:AddKeyDownHandler(
 
         for _, ent in pairs(_G.Ents) do
             if ent and ent.prefab and pickupFilter.prefabs[ent.prefab] then
-                tintItem(ent, filterEnabled)
+                tintEntity(ent, filterEnabled)
             end
         end
     end
