@@ -15,7 +15,6 @@ local REMOVE_INTERACTIONS_BOOL = getKeyFromConfig("REMOVE_INTERACTIONS_FROM_FILT
 local PERSISTENCE_MODE = GetModConfigData("PERSISTENCE_MODE") or "game"
 
 local TAG_FILTERED = "pf_no_pickup"
-local SAVE_FILE = "pickup_filter_data.txt"
 
 local filterEnabled = true
 
