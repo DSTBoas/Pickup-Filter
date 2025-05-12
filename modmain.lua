@@ -14,16 +14,16 @@ local ALLOW_MOUSE_PICKUP_BOOL = getKeyFromConfig("ALLOW_MOUSE_PICKUP_THROUGH_FIL
 local REMOVE_INTERACTIONS_BOOL = getKeyFromConfig("REMOVE_INTERACTIONS_FROM_FILTERED_BOOL")
 local PERSISTENCE_MODE = GetModConfigData("PERSISTENCE_MODE") or "game"
 
-local TAG_FILTERED = "pf_no_pickup"
-
-local filterEnabled = true
+local function IsFiltered(ent)
+    return ent and ent._pf_filtered
+end
 
 local function GetSaveFile()
     if PERSISTENCE_MODE == "disabled" then
         return nil
     elseif PERSISTENCE_MODE == "world" then
         local id = TheNet and TheNet.GetSessionIdentifier and TheNet:GetSessionIdentifier() or "unknown"
-        return string.format("pickup_filter_data%s.txt", id)
+        return string.format("pickup_filter_data_%s.txt", id)
     else
         return "pickup_filter_data.txt"
     end
@@ -31,7 +31,9 @@ end
 
 local function saveFilter(tbl)
     local file = GetSaveFile()
-    if not file then return end
+    if not file then
+        return
+    end
 
     local out, n = {}, 0
     for prefab in pairs(tbl) do
@@ -62,20 +64,26 @@ local function loadFilter(cb)
     )
 end
 
+local filterEnabled = true
 local pickupFilter = {prefabs = {}}
-loadFilter(function(filter)
-    pickupFilter.prefabs = filter
-end)
+
+loadFilter(
+    function(filter)
+        pickupFilter.prefabs = filter
+    end
+)
 
 local function tintEntity(ent, on)
-    if ent and ent.AnimState then
-        if on and filterEnabled then
-            ent.AnimState:SetMultColour(1, 0, 0, 1)
-            ent:AddTag(TAG_FILTERED)
-        else
-            ent.AnimState:SetMultColour(1, 1, 1, 1)
-            ent:RemoveTag(TAG_FILTERED)
-        end
+    if not (ent and ent.AnimState) then
+        return
+    end
+
+    ent._pf_filtered = on or nil
+
+    if filterEnabled and on then
+        ent.AnimState:SetMultColour(1, 0, 0, 1)
+    else
+        ent.AnimState:SetMultColour(1, 1, 1, 1)
     end
 end
 
@@ -89,12 +97,8 @@ local function talk(msg)
 end
 
 local function canBeFiltered(ent)
-    return (ent
-        and ent.replica
-        and ent.replica.inventoryitem
-        and ent.replica.inventoryitem:CanBePickedUp()
-    )
-    or (ent and ent:HasTag("pickable"))
+    return (ent and ent.replica and ent.replica.inventoryitem and ent.replica.inventoryitem:CanBePickedUp()) or
+        (ent and ent:HasTag("pickable"))
 end
 
 local function PatchCanMouseThrough(inst)
@@ -106,7 +110,7 @@ local function PatchCanMouseThrough(inst)
     inst._pf_original_can_mouse = inst.CanMouseThrough
 
     inst.CanMouseThrough = function(self, ...)
-        if filterEnabled and self:HasTag(TAG_FILTERED) then
+        if filterEnabled and IsFiltered(self) then
             return true, true
         end
         if self._pf_original_can_mouse then
@@ -115,21 +119,21 @@ local function PatchCanMouseThrough(inst)
     end
 end
 
-AddPrefabPostInitAny(function(inst)
-    if not inst then
-        return
-    end
+AddPrefabPostInitAny(
+    function(inst)
+        if not inst then
+            return
+        end
 
-    if REMOVE_INTERACTIONS_BOOL then
-        PatchCanMouseThrough(inst)
-    end
+        if REMOVE_INTERACTIONS_BOOL then
+            PatchCanMouseThrough(inst)
+        end
 
-    if inst.prefab and pickupFilter.prefabs[inst.prefab] then
-        inst:DoTaskInTime(FRAMES * 2, function()
+        if inst.prefab and pickupFilter.prefabs[inst.prefab] then
             tintEntity(inst, true)
-        end)
+        end
     end
-end)
+)
 
 AddClassPostConstruct(
     "components/playeractionpicker",
@@ -141,11 +145,13 @@ AddClassPostConstruct(
 
             for i = #actions, 1, -1 do
                 local act = actions[i]
-                if act and act.target and act.target.prefab and pickupFilter.prefabs[act.target.prefab] then
-                    local isFilteredAction = not ALLOW_MOUSE_PICKUP_BOOL and (act.action == ACTIONS.PICK or act.action == ACTIONS.PICKUP)
-                    local isExamineOrWalk = REMOVE_INTERACTIONS_BOOL and (act.action == ACTIONS.LOOKAT or act.action == ACTIONS.WALKTO)
+                if act and act.target and pickupFilter.prefabs[act.target.prefab] then
+                    local isFilteredAction =
+                        not ALLOW_MOUSE_PICKUP_BOOL and (act.action == ACTIONS.PICK or act.action == ACTIONS.PICKUP)
+                    local isExamineOrWalkTo =
+                        REMOVE_INTERACTIONS_BOOL and (act.action == ACTIONS.LOOKAT or act.action == ACTIONS.WALKTO)
 
-                    if isFilteredAction or isExamineOrWalk then
+                    if isFilteredAction or isExamineOrWalkTo then
                         table.remove(actions, i)
                     end
                 end
@@ -153,32 +159,30 @@ AddClassPostConstruct(
             return actions
         end
 
-        local originalGetLeftClickActions = self.GetLeftClickActions
-        function self:GetLeftClickActions(...)
-            local actions = originalGetLeftClickActions(self, ...)
-            return filterActions(actions, self.inst)
+        local old_left = self.GetLeftClickActions
+        self.GetLeftClickActions = function(...)
+            return filterActions(old_left(...), self.inst)
         end
 
-        local originalGetRightClickActions = self.GetRightClickActions
-        function self:GetRightClickActions(...)
-            local actions = originalGetRightClickActions(self, ...)
-            return filterActions(actions, self.inst)
+        local old_right = self.GetRightClickActions
+        self.GetRightClickActions = function(...)
+            return filterActions(old_right(...), self.inst)
         end
     end
 )
 
 AddClassPostConstruct(
     "components/playercontroller",
-    function(playercontroller)
-        local originalGetActionButtonAction = playercontroller.GetActionButtonAction
-        function playercontroller:GetActionButtonAction(force_target, ...)
-            local act = originalGetActionButtonAction(self, force_target, ...)
+    function(pc)
+        local old = pc.GetActionButtonAction
+        function pc:GetActionButtonAction(force_target, ...)
+            local act = old(self, force_target, ...)
             if
                 act and (act.action == ACTIONS.PICK or act.action == ACTIONS.PICKUP) and filterEnabled and
                     pickupFilter.prefabs[act.target.prefab] and
                     self.inst == _G.ThePlayer
              then
-                return
+                return nil
             end
             return act
         end
@@ -187,13 +191,13 @@ AddClassPostConstruct(
 
 AddClassPostConstruct(
     "components/inventoryitem_replica",
-    function(self)
-        local originalCanBePickedUp = self.CanBePickedUp
-        function self:CanBePickedUp(picker)
-            if filterEnabled and picker == _G.ThePlayer and self.inst and self.inst:HasTag(TAG_FILTERED) then
+    function(replica)
+        local old = replica.CanBePickedUp
+        function replica:CanBePickedUp(picker)
+            if filterEnabled and picker == _G.ThePlayer and IsFiltered(self.inst) then
                 return false
             end
-            return originalCanBePickedUp(self, picker)
+            return old(self, picker)
         end
     end
 )
@@ -208,49 +212,50 @@ _G.TheInput:AddKeyDownHandler(
         local touched = {}
         if REMOVE_INTERACTIONS_BOOL then
             for _, inst in pairs(_G.Ents) do
-                if inst and inst:HasTag(TAG_FILTERED)
-                then
+                if IsFiltered(inst) then
                     touched[inst] = inst.CanMouseThrough
                     inst.CanMouseThrough = nil
                 end
             end
         end
 
-        _G.ThePlayer:DoTaskInTime(_G.FRAMES, function()
-            local ent = _G.TheInput:GetWorldEntityUnderMouse()
+        _G.ThePlayer:DoTaskInTime(
+            FRAMES,
+            function()
+                local ent = _G.TheInput:GetWorldEntityUnderMouse()
 
-            for inst, wrapped in pairs(touched) do
-                inst.CanMouseThrough = function(self, ...)
-                    if filterEnabled and self:HasTag(TAG_FILTERED) then
-                        return true, true
+                for inst, wrapped in pairs(touched) do
+                    inst.CanMouseThrough = function(self, ...)
+                        if filterEnabled and IsFiltered(self) then
+                            return true, true
+                        end
+                        return wrapped and wrapped(self, ...)
                     end
-                    return wrapped and wrapped(self, ...)
+                end
+                touched = nil
+
+                if not (ent and ent.prefab and canBeFiltered(ent)) then
+                    talk("I can't filter that.")
+                    return
+                end
+
+                local prefab = ent.prefab
+                local now_filtered = not pickupFilter.prefabs[prefab]
+                pickupFilter.prefabs[prefab] = now_filtered or nil
+                saveFilter(pickupFilter.prefabs)
+
+                talk(
+                    now_filtered and string.format("Okay! I'll ignore “%s” from now on.", ent.name or prefab) or
+                        string.format("Got it! I'll pick up “%s” again.", ent.name or prefab)
+                )
+
+                for _, inst in pairs(_G.Ents) do
+                    if inst and inst.prefab == prefab then
+                        tintEntity(inst, now_filtered and filterEnabled)
+                    end
                 end
             end
-            touched = nil
-
-            if not (ent and ent.prefab and canBeFiltered(ent)) then
-                talk("I can’t filter that.")
-                return
-            end
-
-            local prefab = ent.prefab
-            local now_filtered = not pickupFilter.prefabs[prefab]
-            pickupFilter.prefabs[prefab] = now_filtered or nil
-            saveFilter(pickupFilter.prefabs)
-
-            talk(
-                now_filtered
-                    and string.format("Okay! I’ll ignore “%s” from now on.", ent.name or prefab)
-                    or  string.format("Got it! I’ll pick up “%s” again.",   ent.name or prefab)
-            )
-
-            for _, inst in pairs(_G.Ents) do
-                if inst and inst.prefab == prefab then
-                    tintEntity(inst, now_filtered and filterEnabled)
-                end
-            end
-        end)
+        )
     end
 )
 
@@ -260,13 +265,13 @@ _G.TheInput:AddKeyDownHandler(
         if _G.IsPaused() then
             return
         end
-        filterEnabled = not filterEnabled
 
+        filterEnabled = not filterEnabled
         talk(filterEnabled and "Pickup filter enabled." or "Pickup filter temporarily disabled.")
 
-        for _, ent in pairs(_G.Ents) do
-            if ent and ent.prefab and pickupFilter.prefabs[ent.prefab] then
-                tintEntity(ent, filterEnabled)
+        for _, inst in pairs(_G.Ents) do
+            if inst and pickupFilter.prefabs[inst.prefab] then
+                tintEntity(inst, filterEnabled)
             end
         end
     end
