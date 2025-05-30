@@ -276,3 +276,89 @@ _G.TheInput:AddKeyDownHandler(
         end
     end
 )
+
+local PICKUP_PRIORITY = {
+    goldnugget = 20,
+    gears = 18,
+    purplegem = 15,
+    cutgrass =  2,
+}
+
+local PlayerControl = _G.require "components/playercontroller"
+local UpvalueHacker = _G.require "upvaluehacker"
+
+local GET_ACTION = PlayerControl.GetActionButtonAction
+local PICKUP_EXCLUDE = UpvalueHacker.GetUpvalue(GET_ACTION,"PICKUP_TARGET_EXCLUDE_TAGS")
+local GetPickupAction = UpvalueHacker.GetUpvalue(GET_ACTION,"GetPickupAction")
+
+local function is_pickup(act)
+    return act ~= nil
+       and (act.action == ACTIONS.PICKUP or act.action == ACTIONS.PICK)
+end
+
+local function weight(ent)
+    if IsFiltered(ent) then
+        return -math.huge
+    end
+    return PICKUP_PRIORITY[ent.prefab] or 0
+end
+
+AddClassPostConstruct("components/playercontroller", function(self)
+    local _old = self.GetActionButtonAction
+
+    function self:GetActionButtonAction(force_target, ...)
+        local act = _old(self, force_target, ...)
+
+        if not is_pickup(act) then
+            return act
+        end
+
+        local pickup_tags = {
+            "_inventoryitem","pickable","donecooking","readyforharvest",
+            "notreadyforharvest","harvestable","trapsprung","minesprung",
+            "dried","inactive","smolder","saddled","brushable",
+            "tapped_harvestable","tendable_farmplant",
+            "inventoryitemholder_take","client_forward_action_target",
+        }
+
+        local tool = self.inst.replica.inventory:GetEquippedItem(GLOBAL.EQUIPSLOTS.HANDS)
+        if tool ~= nil then
+            for tag,_ in pairs(_G.TOOLACTIONS) do
+                if tool:HasTag(tag.."_tool") then
+                    table.insert(pickup_tags, tag.."_workable")
+                end
+            end
+        end
+        if self.inst.components.revivablecorpse ~= nil then
+            table.insert(pickup_tags, "corpse")
+        end
+
+        local x,y,z = self.inst.Transform:GetWorldPosition()
+        local ents = GLOBAL.TheSim:FindEntities(
+                        x, y, z,
+                        self.directwalking and 3 or 6,
+                        nil, PICKUP_EXCLUDE, pickup_tags)
+
+        table.sort(ents, function(a,b) return weight(a) > weight(b) end)
+
+        for _,v in ipairs(ents) do
+            if not IsFiltered(v) then 
+                v = v.client_forward_target or v
+                if v ~= self.inst and v.entity:IsVisible()
+                and GLOBAL.CanEntitySeeTarget(self.inst, v) then
+                    local a = GetPickupAction(self, v, tool)
+                    if a ~= nil then
+                        if act ~= nil and act.target == v then
+                            return act
+                        end
+                        return GLOBAL.BufferedAction(
+                                self.inst, v, a,
+                                a ~= ACTIONS.SMOTHER and tool or nil)
+                    end
+                end
+            end
+        end
+
+        return act
+    end
+end)
