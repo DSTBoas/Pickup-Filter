@@ -12,6 +12,7 @@ local FILTER_ITEM_KEY = getKeyFromConfig("FILTER_ITEM_KEY")
 local TOGGLE_PICKUP_FILTER_KEY = getKeyFromConfig("TOGGLE_PICKUP_FILTER_KEY")
 local ALLOW_MOUSE_PICKUP_BOOL = getKeyFromConfig("ALLOW_MOUSE_PICKUP_THROUGH_FILTER_BOOL")
 local REMOVE_INTERACTIONS_BOOL = getKeyFromConfig("REMOVE_INTERACTIONS_FROM_FILTERED_BOOL")
+local RED_TINT_ENABLED_BOOL = getKeyFromConfig("RED_TINT_ENABLED_BOOL")
 local PERSISTENCE_MODE = GetModConfigData("PERSISTENCE_MODE") or "game"
 
 local function IsFiltered(ent)
@@ -74,7 +75,8 @@ loadFilter(
 )
 
 local function tintEntity(ent, on)
-    if not (ent and ent.AnimState) then
+    if not (ent and ent.AnimState) or not RED_TINT_ENABLED_BOOL then
+        print("GOT HERE")
         return
     end
 

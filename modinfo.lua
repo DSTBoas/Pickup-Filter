@@ -5,7 +5,7 @@ icon_atlas = "modicon.xml"
 icon = "modicon.tex"
 
 author = "Boas"
-version = "1.0.3"
+version = "1.0.4"
 forumthread = ""
 
 dont_starve_compatible = false
@@ -96,7 +96,7 @@ configuration_options =
     ),
     AddSectionTitle("Advanced Settings"),
     AddConfig(
-        "Allow Mouse",
+        "Allow Mouse Pickup",
         "ALLOW_MOUSE_PICKUP_THROUGH_FILTER_BOOL",
         ToggleOptions,
         false,
@@ -108,6 +108,13 @@ configuration_options =
         ToggleOptions,
         false,
         "Prevents all interactions, including examine, with items that are currently filtered."
+    ),
+    AddConfig(
+        "Red Tint",
+        "RED_TINT_ENABLED_BOOL",
+        ToggleOptions,
+        true,
+        "Enable red highlight for filtered items.\nItems are still filtered even if highlighting is disabled."
     ),
     AddSectionTitle("Save Settings"),
     AddConfig(
