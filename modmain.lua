@@ -232,7 +232,6 @@ AddClassPostConstruct(
             end
             return old(self, picker)
         end
-        replica._test = true
     end
 )
 
