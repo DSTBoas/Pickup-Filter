@@ -5,7 +5,7 @@ icon_atlas = "modicon.xml"
 icon = "modicon.tex"
 
 author = "Boas"
-version = "1.0.4"
+version = "1.0.5"
 forumthread = ""
 
 dont_starve_compatible = false
@@ -100,7 +100,7 @@ configuration_options =
         "ALLOW_MOUSE_PICKUP_THROUGH_FILTER_BOOL",
         ToggleOptions,
         false,
-        "Allows mouse clicks to bypass the pickup filter for harvestable objects (e.g., Flowers, Grass), but not items lying on the ground."
+        "Allows mouse clicks to bypass the pickup filter"
     ),
     AddConfig(
         "Remove Interactions",

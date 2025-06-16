@@ -76,7 +76,6 @@ loadFilter(
 
 local function tintEntity(ent, on)
     if not (ent and ent.AnimState) or not RED_TINT_ENABLED_BOOL then
-        print("GOT HERE")
         return
     end
 
@@ -137,41 +136,73 @@ AddPrefabPostInitAny(
     end
 )
 
-AddClassPostConstruct(
-    "components/playeractionpicker",
-    function(self)
-        local function filterActions(actions, inst)
-            if not (filterEnabled and inst == _G.ThePlayer) then
-                return actions
-            end
-
-            for i = #actions, 1, -1 do
-                local act = actions[i]
-                if act and act.target and pickupFilter.prefabs[act.target.prefab] then
-                    local isFilteredAction =
-                        not ALLOW_MOUSE_PICKUP_BOOL and (act.action == ACTIONS.PICK or act.action == ACTIONS.PICKUP)
-                    local isExamineOrWalkTo =
-                        REMOVE_INTERACTIONS_BOOL and (act.action == ACTIONS.LOOKAT or act.action == ACTIONS.WALKTO)
-
-                    if isFilteredAction or isExamineOrWalkTo then
-                        table.remove(actions, i)
-                    end
-                end
-            end
+AddClassPostConstruct("components/playeractionpicker", function(self)
+    local function addPickupIfAllowed(picker, actions, target)
+        if not (ALLOW_MOUSE_PICKUP_BOOL and filterEnabled) then
+            return actions
+        end
+        if target == nil
+            or target.replica == nil
+            or target.replica.inventoryitem == nil
+            or not pickupFilter.prefabs[target.prefab]
+        then
             return actions
         end
 
-        local old_left = self.GetLeftClickActions
-        self.GetLeftClickActions = function(...)
-            return filterActions(old_left(...), self.inst)
+        for _, act in ipairs(actions) do
+            if (act.action or act) == ACTIONS.PICKUP then
+                return actions
+            end
         end
 
-        local old_right = self.GetRightClickActions
-        self.GetRightClickActions = function(...)
-            return filterActions(old_right(...), self.inst)
-        end
+        local ba = _G.BufferedAction(picker.inst, target, ACTIONS.PICKUP)
+        table.insert(actions, 1, ba)
+
+        return actions
     end
-)
+
+    local function filterActions(actions, inst)
+        if not (filterEnabled and inst == _G.ThePlayer) then
+            return actions
+        end
+
+        for i = #actions, 1, -1 do
+            local act = actions[i]
+            if act and act.target and pickupFilter.prefabs[act.target.prefab] then
+                local isFilteredAction =
+                    not ALLOW_MOUSE_PICKUP_BOOL
+                    and (act.action == ACTIONS.PICK or act.action == ACTIONS.PICKUP)
+
+                local isExamineOrWalkTo =
+                    REMOVE_INTERACTIONS_BOOL
+                    and (act.action == ACTIONS.LOOKAT or act.action == ACTIONS.WALKTO)
+
+                if isFilteredAction or isExamineOrWalkTo then
+                    table.remove(actions, i)
+                end
+            end
+        end
+        return actions
+    end
+
+    local old_left = self.GetLeftClickActions
+    self.GetLeftClickActions = function(picker, position, target, ...)
+        local actions = old_left(picker, position, target, ...)
+        actions = filterActions(actions, picker.inst)
+        actions = addPickupIfAllowed(picker, actions, target)
+        return actions
+    end
+
+    local old_right = self.GetRightClickActions
+    self.GetRightClickActions = function(picker, position, target, ...)
+        local actions = old_right(picker, position, target, ...)
+
+        actions = filterActions(actions, picker.inst)
+        actions = addPickupIfAllowed(picker, actions, target)
+
+        return actions
+    end
+end)
 
 AddClassPostConstruct(
     "components/playercontroller",
@@ -201,6 +232,7 @@ AddClassPostConstruct(
             end
             return old(self, picker)
         end
+        replica._test = true
     end
 )
 
